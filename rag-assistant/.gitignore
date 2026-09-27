@@ -1,0 +1,16 @@
+# Environment / secrets
+.env
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated at runtime - don't commit your own indexed documents
+vector_store.faiss
+vector_store.pkl
+
+# OS junk
+.DS_Store
