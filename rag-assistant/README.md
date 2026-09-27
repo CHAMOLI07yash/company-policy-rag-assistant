@@ -81,13 +81,13 @@ and you can explain the project in an interview as two clean layers.
 ```bash
 # 1. Create a virtual environment
 python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+source venv/bin/activate
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Set your Anthropic API key (get one at console.anthropic.com)
-export ANTHROPIC_API_KEY=sk-ant-your-key-here
+# 3. Set your  API key 
+export API_KEY=########
 
 # 4. Run the server
 uvicorn app.main:app --reload
@@ -179,39 +179,18 @@ turns a generic chatbot into a grounded, trustworthy document assistant.
 
 ## 6. Failure modes I ran into (and how I'd explain them in an interview)
 
-These are the kinds of things interviewers actually want to hear about —
-not that everything worked perfectly, but that you understand *why*
-things broke and how you'd fix them.
-
-1. **Scanned PDFs return empty text.** `pypdf` can only extract text that's
-   actually embedded in the PDF. A scanned contract is just an image, so
-   extraction silently returns nothing. *Fix:* detect empty extraction and
-   fall back to OCR (e.g. `pytesseract` + `pdf2image`).
-
-2. **Hallucination without a strict prompt.** Early on, without the
+1. **Hallucination without a strict prompt.** Early on, without the
    "answer only from context" instruction, the LLM answered *every*
    question confidently, including ones the documents never covered —
    inventing a leave policy that sounded right but wasn't in any PDF.
    *Fix:* the explicit instruction + fallback phrase in the prompt, shown
    in `generate_answer()`.
 
-3. **Chunk boundaries splitting key sentences.** With no overlap, a
+2. **Chunk boundaries splitting key sentences.** With no overlap, a
    sentence like "employees are entitled to 18 days of leave" could get
    split so that "18 days" ends up in one chunk and "of leave" in the
    next, weakening both chunks' embeddings. *Fix:* the 50-word overlap.
 
-4. **Irrelevant chunks pulled in for vague questions.** A very short or
-   ambiguous question (e.g. "leave?") embeds to a vector that's not
-   clearly close to any one chunk, so FAISS can return weakly-relevant
-   results, which the LLM then has to work around. *Fix ideas:* re-ranking
-   retrieved chunks with a cross-encoder, or asking the user to clarify
-   when similarity scores are all low.
-
-5. **No source-conflict handling.** If two uploaded PDFs disagree (e.g. an
-   outdated handbook vs. an updated policy), both get retrieved and the
-   LLM has to silently pick one — with no guarantee it explains the
-   conflict. *Fix idea:* tag documents with version/date metadata and
-   prefer the newest, or explicitly ask the LLM to flag contradictions.
 
 ## 7. Improvements I'd make next (great "future work" resume/interview talking points)
 
@@ -232,22 +211,3 @@ things broke and how you'd fix them.
   quotes something present in the retrieved chunks before returning it.
 - **Dockerize** the app for one-command deployment.
 - **Auth** on the endpoints before exposing this beyond localhost.
-
-## 8. How to talk about this on your resume
-
-Example bullet point:
-
-> Built an end-to-end Retrieval-Augmented Generation (RAG) pipeline
-> (FastAPI + FAISS + sentence-transformers + Claude) that answers natural-
-> language questions from uploaded PDF documents, including document
-> chunking, semantic embedding search, and grounded LLM generation.
-
-Be ready to explain, in your own words:
-- What retrieval-augmented generation is and why it beats fine-tuning for
-  "answer questions about my documents."
-- Why you chunk text and what happens if you don't.
-- What an embedding is, at a conceptual level (turns meaning into
-  numbers so "similar meaning" becomes "similar vectors").
-- What FAISS does and why exact vs. approximate search matters at scale.
-- At least one failure you hit and how you fixed it (Section 6 above).
-- At least one improvement you'd make with more time (Section 7 above).
