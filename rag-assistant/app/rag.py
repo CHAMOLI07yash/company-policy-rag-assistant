@@ -7,11 +7,6 @@ This file contains the four building blocks of the RAG pipeline:
 2. chunk_text()               -> Text Chunking
 3. VectorStore                -> Embeddings + Vector Database (FAISS)
 4. generate_answer()          -> LLM call
-
-Keeping all of this in one module (separate from main.py, which only
-handles the web/API layer) makes it easy to test each piece on its own,
-and easy to explain in an interview: "main.py is the API, rag.py is the
-actual pipeline."
 """
 
 import os
@@ -25,17 +20,9 @@ import anthropic
 
 
 # ---------------------------------------------------------------------------
-# 1. DOCUMENT LOADER
+# 1. LOADER
 # ---------------------------------------------------------------------------
 def extract_text_from_pdf(file_path: str) -> str:
-    """
-    Reads a PDF file and returns all its text as one big string.
-
-    Note: this only works for PDFs that contain real text (i.e. exported
-    from Word, Google Docs, etc). Scanned/photographed PDFs are just images
-    of text, and pypdf will return an empty string for them. Handling those
-    would require OCR (e.g. pytesseract) - see README "Improvements" section.
-    """
     reader = PdfReader(file_path)
     full_text = []
     for page in reader.pages:
@@ -45,27 +32,9 @@ def extract_text_from_pdf(file_path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 2. TEXT CHUNKING
+# 2. CHUNKER
 # ---------------------------------------------------------------------------
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
-    """
-    Splits a long piece of text into overlapping word-based chunks.
-
-    Why chunk at all?
-        - LLMs and embedding models have limited context windows.
-        - Smaller chunks give more *precise* retrieval: if a whole 10-page
-          PDF was one "chunk", every question would retrieve the entire
-          document, defeating the purpose of retrieval.
-
-    Why overlap?
-        - Without overlap, a sentence that happens to fall right on a chunk
-          boundary gets split in half, and its meaning can be lost in both
-          halves. Overlap (e.g. 50 words) means each chunk shares some
-          context with its neighbor.
-
-    chunk_size=500 words and overlap=50 are reasonable starting defaults for
-    policy-style documents. Tune them based on your documents (see README).
-    """
     words = text.split()
     if not words:
         return []
@@ -78,7 +47,7 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
         chunks.append(" ".join(chunk_words))
         if end >= len(words):
             break
-        start = end - overlap  # step back by `overlap` so chunks share context
+        start = end - overlap  
     return chunks
 
 
@@ -86,27 +55,12 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
 # 3. EMBEDDINGS + VECTOR DATABASE
 # ---------------------------------------------------------------------------
 class VectorStore:
-    """
-    Wraps a sentence-transformer embedding model + a FAISS index.
-
-    - The embedding model turns text into a vector (a list of numbers) that
-      captures its *meaning*. Similar meanings -> similar vectors.
-    - FAISS stores these vectors and can very quickly find the ones closest
-      to a given query vector ("similarity search").
-
-    We keep `self.chunks` as a plain Python list that is index-aligned with
-    the FAISS vectors: chunks[i] is the text for the vector stored at
-    position i in the FAISS index. FAISS itself only stores numbers, not
-    text or metadata, so we track that ourselves.
-    """
-
+  
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
-        # all-MiniLM-L6-v2 is a small (~80MB), fast, free, open-source
-        # embedding model - good enough for a learning/portfolio project.
         self.model = SentenceTransformer(model_name)
         self.dimension = self.model.get_sentence_embedding_dimension()
-        self.index = faiss.IndexFlatL2(self.dimension)  # exact L2 (Euclidean) search
-        self.chunks: list[dict] = []  # [{"text": ..., "source": ...}, ...]
+        self.index = faiss.IndexFlatL2(self.dimension)  
+        self.chunks: list[dict] = []  
 
     def embed(self, texts: list[str]) -> np.ndarray:
         return self.model.encode(texts, convert_to_numpy=True)
@@ -130,7 +84,7 @@ class VectorStore:
             if idx == -1:
                 continue
             result = dict(self.chunks[idx])
-            result["distance"] = float(dist)  # lower = more similar (L2 distance)
+            result["distance"] = float(dist) 
             results.append(result)
         return results
 
@@ -156,10 +110,10 @@ _client = None
 def _get_client() -> anthropic.Anthropic:
     global _client
     if _client is None:
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        api_key = os.environ.get("API_KEY")
         if not api_key:
             raise RuntimeError(
-                "ANTHROPIC_API_KEY environment variable is not set. "
+                "API_KEY environment variable is not set. "
                 "Get a key from https://console.anthropic.com and set it "
                 "before running the server."
             )
@@ -168,15 +122,6 @@ def _get_client() -> anthropic.Anthropic:
 
 
 def generate_answer(question: str, context_chunks: list[dict]) -> str:
-    """
-    Builds a prompt that forces the model to answer ONLY from the retrieved
-    chunks, and to admit when it doesn't know rather than guessing.
-
-    This "answer only from context" instruction is the single most
-    important line in the whole project - without it, the LLM will happily
-    hallucinate a plausible-sounding leave policy that isn't in your
-    documents at all.
-    """
     if not context_chunks:
         return "I don't have enough information in the documents to answer that."
 
