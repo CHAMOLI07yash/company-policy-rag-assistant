@@ -1,12 +1,7 @@
 """
 main.py
 -------
-The API layer. This file knows nothing about embeddings or FAISS
-internals - it just wires HTTP endpoints to the functions in rag.py.
-This separation (API vs. pipeline logic) is good practice and also makes
-this project easier to explain: "main.py is the interface, rag.py is the
-engine."
-
+This is an API layer.
 Run with:
     uvicorn app.main:app --reload
 
@@ -27,10 +22,7 @@ app = FastAPI(
     description="Upload PDF policy documents, then ask questions about them.",
 )
 
-# --- global state -----------------------------------------------------------
-# For a real production app this would live in a database / managed vector
-# service. For a learning project, one in-memory (but disk-persisted) store
-# per process is simplest and easiest to reason about.
+
 INDEX_PATH = "vector_store"
 store = VectorStore()
 if os.path.exists(INDEX_PATH + ".faiss"):
